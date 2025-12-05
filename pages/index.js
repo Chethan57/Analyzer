@@ -1,33 +1,56 @@
 import { useState } from 'react';
 
 export default function Home() {
-  const [file, setFile] = useState(null);
   const [result, setResult] = useState('');
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-  };
-
-  const handleAnalyze = async () => {
+  const handleFile = (e) => {
+    const file = e.target.files[0];
     if (!file) {
-      alert('Please upload a CSV file.');
+      alert('Please select a CSV file.');
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result;
+      analyzeCSV(text);
+    };
+    reader.readAsText(file);
+  };
 
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      body: formData,
+  const analyzeCSV = (text) => {
+    const rows = text.split('\n').filter((r) => r.trim() !== '');
+    if (rows.length < 2) {
+      setResult('CSV has no data');
+      return;
+    }
+
+    const headers = rows[0].split(',');
+    const dataRows = rows.slice(1).map((r) => r.split(','));
+
+    const resultObj = {
+      totalRows: dataRows.length,
+      totalColumns: headers.length,
+      columns: headers,
+      numericSummary: {},
+    };
+
+    headers.forEach((header, idx) => {
+      const nums = dataRows
+        .map((row) => parseFloat(row[idx]))
+        .filter((v) => !isNaN(v));
+      if (nums.length > 0) {
+        const sum = nums.reduce((a, b) => a + b, 0);
+        resultObj.numericSummary[header] = {
+          count: nums.length,
+          min: Math.min(...nums),
+          max: Math.max(...nums),
+          average: sum / nums.length,
+        };
+      }
     });
 
-    const data = await res.json();
-    if (data.error) {
-      setResult('Error: ' + data.error);
-    } else {
-      setResult(data.summary);
-    }
+    setResult(JSON.stringify(resultObj, null, 2));
   };
 
   return (
@@ -37,19 +60,12 @@ export default function Home() {
       <input
         type="file"
         accept=".csv"
-        onChange={handleFileChange}
+        onChange={handleFile}
         className="mb-4 p-2 rounded border border-blue-400 bg-gray-700 cursor-pointer"
       />
 
-      <button
-        onClick={handleAnalyze}
-        className="mb-6 px-6 py-2 bg-blue-500 text-white font-semibold rounded hover:bg-blue-600 transition-colors"
-      >
-        Analyze
-      </button>
-
       <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-3xl whitespace-pre-wrap">
-        {result || 'Analysis output will appear here...'}
+        {result || 'Upload a CSV file to see analysis here...'}
       </div>
     </div>
   );
