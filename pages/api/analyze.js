@@ -7,24 +7,29 @@ export default async function handler(req, res) {
     if (!csvData || csvData.trim().length < 5)
       return res.status(400).json({ error: "Invalid CSV data" });
 
-    console.log("Received CSV sample:", csvData.slice(0, 200));
+    console.log("Sample received:", csvData.slice(0, 150));
 
-    const parsed = Papa.parse(csvData, { header: true });
+    const parsed = Papa.parse(csvData, {
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: true,
+      delimiter: "",       // auto-detect
+      transformHeader: (h) => h.trim()
+    });
 
-    if (parsed.errors.length > 0) {
-      console.error(parsed.errors);
+    if (parsed.errors && parsed.errors.length > 0) {
+      console.error("CSV ERROR:", parsed.errors);
       return res.status(400).json({ error: "CSV parse failed" });
     }
 
     const rows = parsed.data;
-
     const numericCols = {};
     const summaries = {};
 
     rows.forEach((row) => {
       Object.keys(row).forEach((col) => {
-        const val = parseFloat(row[col]);
-        if (!isNaN(val)) {
+        const val = row[col];
+        if (typeof val === "number" && !isNaN(val)) {
           if (!numericCols[col]) numericCols[col] = [];
           numericCols[col].push(val);
         }
@@ -41,9 +46,8 @@ export default async function handler(req, res) {
       };
     });
 
-    res.json({
-      summary: summaries
-    });
+    res.json({ summary: summaries });
+
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Server error", details: e.message });
