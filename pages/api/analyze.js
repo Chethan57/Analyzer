@@ -1,42 +1,53 @@
+import { IncomingForm } from 'formidable';
+import fs from 'fs';
+
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-import Papa from "papaparse";
-
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Only POST allowed" });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Only POST requests allowed' });
   }
 
-  const buffers = [];
+  const form = new IncomingForm();
 
-  req.on("data", (chunk) => buffers.push(chunk));
-  req.on("end", () => {
-    const csvData = Buffer.concat(buffers).toString();
+  form.parse(req, (err, fields, files) => {
+    if (err) return res.status(500).json({ error: 'File parse failed' });
+    const file = files.file;
 
-    if (!csvData) {
-      return res.status(400).json({ error: "No CSV received" });
-    }
+    if (!file) return res.status(400).json({ error: 'No CSV file uploaded' });
 
-    // Parse CSV
-    const parsed = Papa.parse(csvData, { header: true });
+    const data = fs.readFileSync(file.filepath, 'utf-8');
+    const rows = data.split('\n').filter((r) => r.trim() !== '');
+    if (rows.length < 2) return res.json({ summary: 'CSV has no data' });
 
-    if (parsed.errors.length > 0) {
-      return res.status(400).json({ error: "Invalid CSV" });
-    }
-
-    const rows = parsed.data.filter((r) => Object.keys(r).length > 1);
-
-    const summary = {
-      totalRows: rows.length,
-      totalColumns: rows.length ? Object.keys(rows[0]).length : 0,
-      columns: rows.length ? Object.keys(rows[0]) : [],
-      sample: rows.slice(0, 5)
+    const headers = rows[0].split(',');
+    const result = {
+      totalRows: rows.length - 1,
+      totalColumns: headers.length,
+      columns: headers,
+      numericSummary: {},
     };
 
-    res.status(200).json(summary);
+    const numericCols = headers.filter((h, idx) =>
+      rows.slice(1).every((r) => !isNaN(parseFloat(r.split(',')[idx])))
+    );
+
+    numericCols.forEach((col) => {
+      const idx = headers.indexOf(col);
+      const nums = rows.slice(1).map((r) => parseFloat(r.split(',')[idx]));
+      const sum = nums.reduce((a, b) => a + b, 0);
+      result.numericSummary[col] = {
+        count: nums.length,
+        min: Math.min(...nums),
+        max: Math.max(...nums),
+        average: sum / nums.length,
+      };
+    });
+
+    res.json({ summary: JSON.stringify(result, null, 2) });
   });
 }
