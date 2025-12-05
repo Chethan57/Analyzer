@@ -1,78 +1,116 @@
 import { useState } from "react";
-import Papa from "papaparse";
 
 export default function Home() {
-  const [csvFile, setCsvFile] = useState(null);
-  const [summary, setSummary] = useState("");
+  const [file, setFile] = useState(null);
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleFileChange = (e) => {
-    setCsvFile(e.target.files[0]);
-    setSummary("");
-  };
-
-  const handleAnalyze = () => {
-    if (!csvFile) {
-      alert("Please upload a CSV file first!");
-      return;
-    }
-
+  const handleUpload = async () => {
+    if (!file) return alert("Upload CSV first");
     setLoading(true);
 
-    Papa.parse(csvFile, {
-      header: true,
-      dynamicTyping: true,
-      complete: (results) => {
-        const data = results.data;
+    const text = await file.text();
 
-        fetch("/api/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ csvData: data }),
-        })
-          .then((res) => res.json())
-          .then((data) => setSummary(data.summary))
-          .catch((err) => setSummary("Error: " + err.message))
-          .finally(() => setLoading(false));
-      },
-      error: (err) => {
-        setSummary("CSV Parse Error: " + err.message);
-        setLoading(false);
-      },
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csvData: text }),
     });
+
+    const data = await res.json();
+    setLoading(false);
+
+    if (data.error) {
+      alert(data.error);
+    } else {
+      setResult(data);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col items-center justify-center text-center p-6">
-      <h1 className="text-4xl font-bold text-blue-400 mb-6">
-        CSV Analyzer
+    <div className="min-h-screen bg-black text-blue-400 flex flex-col items-center py-16">
+      <h1 className="text-4xl font-bold mb-6 text-center">
+        Smart CSV Analyzer
       </h1>
 
-      <input
-        type="file"
-        accept=".csv"
-        onChange={handleFileChange}
-        className="mb-4 p-2 rounded border border-blue-400 bg-gray-700 text-white cursor-pointer"
-      />
+      <div className="bg-gray-900 p-6 rounded-xl shadow-lg w-96 text-center">
+        <input
+          type="file"
+          accept=".csv"
+          onChange={(e) => setFile(e.target.files[0])}
+          className="mb-4 bg-gray-800 p-2 rounded text-white w-full"
+        />
 
-      <button
-        onClick={handleAnalyze}
-        disabled={loading}
-        className="mb-6 px-6 py-2 bg-blue-500 text-white font-semibold rounded hover:bg-blue-600 transition-colors"
-      >
-        {loading ? "Analyzing..." : "Analyze"}
-      </button>
+        <button
+          onClick={handleUpload}
+          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded w-full"
+        >
+          {loading ? "Analyzing..." : "Analyze CSV"}
+        </button>
+      </div>
 
-      {summary && (
-        <div className="bg-gray-800 text-blue-200 p-6 rounded shadow-lg max-w-3xl w-full">
-          <h2 className="text-xl font-semibold mb-4">Analysis Summary:</h2>
-          <pre className="whitespace-pre-wrap text-left">{summary}</pre>
+      {/* RESULT OUTPUT */}
+      {result && (
+        <div className="mt-10 w-3/4 bg-gray-900 p-6 rounded-xl shadow-xl">
+          <h2 className="text-2xl font-semibold mb-4">📊 Analysis Result</h2>
+
+          {/* Show KPIs */}
+          {result.kpis && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+              {Object.keys(result.kpis).map((key) => (
+                <div
+                  key={key}
+                  className="bg-gray-800 p-4 rounded-lg text-center border border-blue-400"
+                >
+                  <p className="text-sm text-gray-300">{key}</p>
+                  <p className="text-xl font-bold text-blue-300">
+                    {result.kpis[key]}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Show Summary */}
+          {result.summary && (
+            <div className="mb-6">
+              <h3 className="text-xl mb-2 text-blue-300">Summary</h3>
+              <p className="text-gray-300 whitespace-pre-line">{result.summary}</p>
+            </div>
+          )}
+
+          {/* Show Table */}
+          {result.table && (
+            <>
+              <h3 className="text-xl mb-2 text-blue-300">Data Table</h3>
+              <div className="overflow-auto max-h-96 border border-gray-800 rounded-lg">
+                <table className="w-full text-left text-gray-300">
+                  <thead className="bg-gray-800">
+                    <tr>
+                      {Object.keys(result.table[0]).map((col) => (
+                        <th key={col} className="p-2 border-b border-gray-700">
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.table.map((row, i) => (
+                      <tr key={i} className="hover:bg-gray-800">
+                        {Object.values(row).map((val, j) => (
+                          <td key={j} className="p-2 border-b border-gray-700">
+                            {val}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
-
-      <footer className="mt-12 text-gray-400">
-        Made with 💙 by You
-      </footer>
     </div>
   );
 }
