@@ -1,7 +1,6 @@
 {
-  "name": "analyzer",
+  "name": "csv-analyzer",
   "version": "1.0.0",
-  "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,7 +10,6 @@
     "next": "14.0.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "formidable": "3.5.1",
-    "csv-parser": "3.0.0"
+    "papaparse": "5.4.1"
   }
 }
